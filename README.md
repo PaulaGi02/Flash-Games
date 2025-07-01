@@ -9,6 +9,6 @@ FlashPlay is a gamified learning app. Players start by importing or creating a d
 4. Package Sorter: On a production line small "Packages" with the front and back of a flashcards comes rolling in and you have to see if the back and fronts matches. If front and back matches it can go into dilivery if it is wron it needs to be picked up from the production line<br>
 <img width="677" alt="Bildschirmfoto 2025-07-01 um 15 57 55" src="https://github.com/user-attachments/assets/8fb1f554-6f50-4c08-978a-8bdc947dce94" /><br>
 
-## installisation
+## Installation
 ## usage
 
