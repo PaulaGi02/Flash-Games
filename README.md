@@ -19,20 +19,20 @@ FlashPlay is a gamified learning app. Players start by importing or creating a d
 
 ### file structure:
 FlashPlay/
-├── flashplay.py             # Main entry point
-├── memory_game.py           # Memory game logic
-├── snake_race.py            # Snake game logic
-├── package_sorter.py        # Package sorter game logic
-├── deck.py                  # Handles flashcard decks (load, shuffle, validate)
-├── ui.py                    # Shared UI components (menus, text rendering, buttons)
-├── media/                   # All images, audio, fonts go here
-│   ├── images/
-│   ├── sounds/
-│   └── fonts/
-├── requirements.txt         # Dependencies for pip
-├── README.md                # Project overview
-├── documentation.md         # Development notes, sketches, challenges, etc.
-└── .gitignore               # Ignore __pycache__, venv, etc.
+├── flashplay.py             # Main entry point <br>
+├── memory_game.py           # Memory game logic<br>
+├── snake_race.py            # Snake game logic<br>
+├── package_sorter.py        # Package sorter game logic<br>
+├── deck.py                  # Handles flashcard decks (load, shuffle, validate)<br>
+├── ui.py                    # Shared UI components (menus, text rendering, buttons)<br>
+├── media/                   # All images, audio, fonts go here<br>
+│   ├── images/<br>
+│   ├── sounds/<br>
+│   └── fonts/<br>
+├── requirements.txt         # Dependencies for pip<br>
+├── README.md                # Project overview<br>
+├── documentation.md         # Development notes, sketches, challenges, etc.<br>
+└── .gitignore               # Ignore __pycache__, venv, etc.<br>
 
 ## usage
 run from terminal
