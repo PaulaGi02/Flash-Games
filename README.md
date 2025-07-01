@@ -26,9 +26,9 @@ FlashPlay/<br>
 ├── deck.py  <br>
 ├── ui.py    <br>
 ├── media/    <br>
-│   ├── images/<br>
-│   ├── sounds/<br>
-│   └── fonts/<br>
+│    ├── images/<br>
+│    ├── sounds/<br>
+│    └── fonts/<br>
 ├── requirements.txt   <br>
 ├── README.md   <br>
 ├── documentation.md     .<br>
