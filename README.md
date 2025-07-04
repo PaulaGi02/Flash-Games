@@ -22,7 +22,7 @@ vocab_flashcards/
 ├── flashcards.py <br>
 ├── game_memory.py <br>
 ├── game_race.py <br>
-├── assets/ <br>
+├── media/ <br>
 │   ├── images/ <br>
 │   └── sounds/    <br>
 ├── requirements.txt   <br>
