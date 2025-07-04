@@ -16,13 +16,15 @@ FlashPlay is a gamified vocabulary learning app. Players start by importing or c
 5. json for saving/ loading user progress or custom decks
 
 ### file structure:
-FlashPlay/<br>
-├── flashplay.py   <br>
-├── memory_game.py <br>
-├── snake_race.py <br>
-├── deck.py  <br>
-├── ui.py    <br>
-├── media/    <br>
+vocab_flashcards/ 
+
+├── main.py <br>
+├── flashcards.py <br>
+├── game_memory.py <br>
+├── game_race.py <br>
+├── assets/ <br>
+│   ├── images/ <br>
+│   └── sounds/    <br>
 ├── requirements.txt   <br>
 ├── README.md   <br>
 ├── documentation.md     .<br>
