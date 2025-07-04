@@ -7,7 +7,7 @@ Can use Turtle or Canvas animations.
 import tkinter as tk
 import random
 import time
-# Optional: import turtle
+# Optional: import turtle, pygame
 
 class RaceGame:
     def __init__(self, root, flashcards):
