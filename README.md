@@ -27,6 +27,8 @@ vocab_flashcards/
 │   └── sounds/    <br>
 ├── requirements.txt   <br>
 ├── README.md   <br>
+├── LICENCE  <br>
+├── (helper.py) <br>
 ├── documentation.md     .<br>
 └── .gitignore<br>
 
