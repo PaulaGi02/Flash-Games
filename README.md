@@ -25,10 +25,11 @@ vocab_flashcards/
 ├── media/ <br>
 │   ├── images/ <br>
 │   └── sounds/    <br>
+├── DB/ <br>
+│   └── flashcards.db    <br>
 ├── requirements.txt   <br>
 ├── README.md   <br>
 ├── LICENCE  <br>
-├── (helper.py) <br>
 ├── documentation.md     .<br>
 └── .gitignore<br>
 
