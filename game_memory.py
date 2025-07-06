@@ -26,6 +26,24 @@ class MemoryGame:
         # TODO: Check if two flipped cards match
         pass
 
+    def flip_card(self, card_id):
+        # TODO: Change card visual to show term/translation
+        pass
+
+    def hide_card(self, card_id):
+        # TODO: Hide card content (flip it back over)
+        pass
+
+    def is_game_won(self):
+        # TODO: Check if all pairs are matched
+        pass
+
+    def show_game_over(self):
+        # TODO: Display "You Won!" message with score and moves
+        # TODO: Option to restart or return to main menu
+        pass
+
     def reset_game(self):
-        # TODO: Reset state and reshuffle cards
+        # TODO: Clear board, reshuffle cards, reset state variables
+        # TODO: Rebuild the game board
         pass
