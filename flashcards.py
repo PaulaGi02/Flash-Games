@@ -1,8 +1,3 @@
-# flashcards.py
-"""
-Handles all flashcard-related logic: CRUD operations, database storage, loading/saving.
-"""
-
 import sqlite3
 
 class FlashcardManager:

@@ -1,13 +1,8 @@
-# game_race.py
-"""
-Race game: Character moves forward on correct answers, slows on wrong ones.
-Can use Turtle or Canvas animations.
-"""
-
 import tkinter as tk
 import random
 import time
 # Optional: import turtle, pygame
+
 class RaceGame:
     def __init__(self, root, flashcards):
         # TODO: Initialize race game variables and call setup_race_scene

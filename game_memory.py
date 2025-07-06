@@ -1,9 +1,3 @@
-# game_memory.py
-"""
-Memory game: Players flip cards to match terms and translations.
-Uses Canvas for layout and interactivity.
-"""
-
 import tkinter as tk
 import random
 import time
@@ -11,7 +5,7 @@ import time
 class MemoryGame:
     def __init__(self, root, flashcards):
         self.root = root
-        self.flashcards = flashcards  # List of (term, translation) tuples
+        self.flashcards = flashcards
         self.setup_game_board()
 
     def setup_game_board(self):

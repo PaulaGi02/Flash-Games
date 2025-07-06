@@ -1,14 +1,7 @@
-# main.py
-"""
-Main application file that initializes the GUI, handles navigation between screens,
-and connects flashcard and game modules.
-"""
-
 import tkinter as tk
 from flashcards import FlashcardManager
 from game_memory import MemoryGame
 from game_race import RaceGame
-from game_sorting import SortingGame  # Placeholder for future game
 
 class FlashcardApp:
     def __init__(self, root):
