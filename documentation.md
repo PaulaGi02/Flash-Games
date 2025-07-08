@@ -1,0 +1,2 @@
+- add flashcards for testing
+- add the direct translator to flashcard app
