@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-from flashcards import FlashcardManager
+from flashcard_2 import FlashcardManager
 from game_memory import MemoryGame
 from game_race import RaceGame
 
@@ -27,14 +27,14 @@ class FlashcardApp:
     def launch_memory_game(self):
         flashcards = self.flashcard_manager.get_all_flashcards()
         if flashcards:
-            MemoryGame(self.root, flashcards)  # Pass root or Toplevel
+            MemoryGame(self.root, flashcards)
         else:
             messagebox.showinfo("No Flashcards", "Add flashcards before playing.")
 
     def launch_race_game(self):
         flashcards = self.flashcard_manager.get_all_flashcards()
         if flashcards:
-            RaceGame(self.root, flashcards)  # Same structure as MemoryGame
+            RaceGame(self.root, flashcards)
         else:
             messagebox.showinfo("No Flashcards", "Add flashcards before playing.")
 
@@ -88,5 +88,6 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = FlashcardApp(root)
     root.mainloop()
+
 
 
