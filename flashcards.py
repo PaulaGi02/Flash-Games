@@ -7,6 +7,7 @@ class FlashcardManager:
 
     def create_table(self):
         # TODO: Create table if not exists
+        print("Hello!")
         pass
 
     def add_flashcard(self, term, translation):
