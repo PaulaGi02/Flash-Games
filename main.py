@@ -26,18 +26,14 @@ class FlashcardApp:
         tk.Button(self.root, text="Exit", width=25, command=self.root.quit).pack(pady=20)
 
     def launch_memory_game(self):
+        for w in self.root.winfo_children():
+            w.destroy()
+
         flashcards = self.flashcard_manager.get_all_flashcards()
         if flashcards:
             MemoryGame(self.root, flashcards, on_exit=self.setup_main_menu)
         else:
             messagebox.showinfo("No Flashcards", "Add flashcards before playing.")
-
-    # def launch_race_game(self):
-    #     flashcards = self.flashcard_manager.get_all_flashcards()
-    #     if flashcards:
-    #         RaceGame(self.root, flashcards)
-    #     else:
-    #         messagebox.showinfo("No Flashcards", "Add flashcards before playing.")
 
     def manage_flashcards(self):
         for widget in self.root.winfo_children():
