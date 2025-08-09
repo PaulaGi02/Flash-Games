@@ -27,7 +27,7 @@ class FlashcardApp:
     def launch_memory_game(self):
         flashcards = self.flashcard_manager.get_all_flashcards()
         if flashcards:
-            MemoryGame(self.root, flashcards)
+            MemoryGame(self.root, flashcards, on_exit=self.setup_main_menu)
         else:
             messagebox.showinfo("No Flashcards", "Add flashcards before playing.")
 

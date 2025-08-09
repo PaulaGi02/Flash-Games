@@ -25,3 +25,4 @@ class FlashcardManager:
     def update_flashcard(self, flashcard_id, new_term, new_translation):
         # TODO: Update existing flashcard
         pass
+
