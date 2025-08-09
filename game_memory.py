@@ -6,15 +6,17 @@ import math
 
 
 class RoundedCard(tk.Canvas):
-    """Canvas-based card with rounded corners that can resize smoothly."""
-
-    def __init__(self, master, width, height, bg, border_color, radius=18, **kwargs):
+    def __init__(self, master, width, height, bg, inner_rim_color, outer_rim_color, radius=18, **kwargs):
         super().__init__(master, width=width, height=height, bd=0, highlightthickness=0, bg=master['bg'], **kwargs)
         self.radius = radius
         self.bg_color = bg
-        self.border_color = border_color
+        self.inner_rim_color = inner_rim_color
+        self.outer_rim_color = outer_rim_color
+        self.shadow_color = "#89725B"  # Always brown
         self._inner_pad = 12
-        self._round_id = None
+        self._outer_rim_id = None
+        self._inner_rim_id = None
+        self._shadow_id = None
         self._window_id = None
 
         self.button = tk.Button(
@@ -22,14 +24,15 @@ class RoundedCard(tk.Canvas):
             text="",
             font=("Helvetica", 12, "bold"),
             bg=bg,
-            fg="#2B3A2E",
+            fg="#677E52",
             activebackground=bg,
-            activeforeground="#2B3A2E",
+            activeforeground="#677E52",
             relief="flat",
             bd=0,
             cursor="hand2",
-            wraplength=1,
+            wraplength=0,
             justify="center",
+            anchor="center",
         )
         self._redraw(width, height)
 
@@ -51,12 +54,39 @@ class RoundedCard(tk.Canvas):
 
     def _redraw(self, width, height):
         self.config(width=width, height=height)
-        if self._round_id is not None:
-            self.delete(self._round_id)
-        pts = self._round_points(2, 2, width - 2, height - 2, self.radius)
-        self._round_id = self.create_polygon(
-            pts, smooth=True, fill=self.bg_color, outline=self.border_color, width=3
+
+        # Clear existing elements
+        if self._shadow_id is not None:
+            self.delete(self._shadow_id)
+        if self._outer_rim_id is not None:
+            self.delete(self._outer_rim_id)
+        if self._inner_rim_id is not None:
+            self.delete(self._inner_rim_id)
+
+        # Draw shadow (offset by 4 pixels)
+        shadow_pts = self._round_points(4, 4, width + 2, height + 2, self.radius)
+        self._shadow_id = self.create_polygon(
+            shadow_pts, smooth=True, fill=self.shadow_color, outline="", width=0
         )
+
+        # Draw outer rim
+        outer_pts = self._round_points(2, 2, width - 2, height - 2, self.radius)
+        self._outer_rim_id = self.create_polygon(
+            outer_pts, smooth=True, fill=self.outer_rim_color, outline="", width=0
+        )
+
+        # Draw inner rim (card background)
+        inner_pts = self._round_points(6, 6, width - 6, height - 6, self.radius - 4)
+        self._inner_rim_id = self.create_polygon(
+            inner_pts, smooth=True, fill=self.inner_rim_color, outline="", width=0
+        )
+
+        # Draw main card background
+        card_pts = self._round_points(10, 10, width - 10, height - 10, self.radius - 8)
+        self._card_bg_id = self.create_polygon(
+            card_pts, smooth=True, fill=self.bg_color, outline="", width=0
+        )
+
         inner_w = max(1, width - self._inner_pad * 2)
         inner_h = max(1, height - self._inner_pad * 2)
         if self._window_id is None:
@@ -70,9 +100,13 @@ class RoundedCard(tk.Canvas):
     def resize(self, width, height):
         self._redraw(width, height)
 
-    def set_card_color(self, color):
-        self.itemconfig(self._round_id, fill=color)
-        self.bg_color = color
+    def set_card_colors(self, bg_color, inner_rim_color, outer_rim_color):
+        self.bg_color = bg_color
+        self.inner_rim_color = inner_rim_color
+        self.outer_rim_color = outer_rim_color
+        self.itemconfig(self._card_bg_id, fill=bg_color)
+        self.itemconfig(self._inner_rim_id, fill=inner_rim_color)
+        self.itemconfig(self._outer_rim_id, fill=outer_rim_color)
 
 
 class MemoryGame:
@@ -91,7 +125,7 @@ class MemoryGame:
             "sage": "#B0CC99",
             "brown": "#89725B",
             "lime": "#B7CA79",
-            "dark_green": "#2B3A2E",
+            "dark_green": "#677E52",
         }
 
         # container: only child of root while game is active (use pack here)
@@ -120,13 +154,28 @@ class MemoryGame:
         # Bind resize on container (not root) to avoid global churn
         self._resize_bind_id = self.container.bind("<Configure>", self._on_resize)
 
+    def _fit_single_line(self, button, max_width_px):
+        txt = button.cget("text") or ""
+        if not txt:
+            return
+        f = font.Font(font=button.cget("font"))
+        fam = f.actual("family")
+        size = f.actual("size") or 12
+        button.configure(wraplength=0, anchor="center", justify="center")
+        while size >= 8:
+            f.configure(size=size)
+            if f.measure(txt) <= max_width_px:
+                break
+            size -= 1
+        button.configure(font=(fam, size, "bold"))
+
     # -------------------------- layout -----------------------------------
     def _build_layout(self):
         # clear container only (never touch other root content)
         for w in self.container.winfo_children():
             w.destroy()
         self.root.title("FlashPlay - Memory Game")
-        self.root.configure(bg=self.colors["cream"])  # theme only inside container
+        self.root.configure(bg=self.colors["cream"])
 
         # grid inside container; root uses pack -> no pack/grid mixing
         self.container.grid_rowconfigure(2, weight=1)
@@ -143,7 +192,7 @@ class MemoryGame:
             fg=self.colors["dark_green"],
         ).pack()
 
-        info = tk.Frame(self.container, bg=self.colors["cream"])  # row 1
+        info = tk.Frame(self.container, bg=self.colors["cream"])
         info.grid(row=1, column=0, sticky="ew", pady=(0, 6))
         info_font = font.Font(family="Helvetica", size=12)
         self.moves_label = tk.Label(
@@ -168,7 +217,7 @@ class MemoryGame:
         button_font = font.Font(family="Helvetica", size=11, weight="bold")
 
         def card_button(parent, text, command):
-            outer = tk.Frame(parent, bg=self.colors["brown"])  # border card
+            outer = tk.Frame(parent, bg=self.colors["brown"])
             inner = tk.Frame(outer, bg=self.colors["sage"])
             btn = tk.Button(
                 inner,
@@ -190,9 +239,13 @@ class MemoryGame:
             outer.pack(side="left", padx=10)
 
             def on_enter(_):
-                btn.configure(bg=self.colors["lime"]) ; inner.configure(bg=self.colors["lime"])
+                btn.configure(bg=self.colors["lime"]);
+                inner.configure(bg=self.colors["lime"])
+
             def on_leave(_):
-                btn.configure(bg=self.colors["sage"]) ; inner.configure(bg=self.colors["sage"])
+                btn.configure(bg=self.colors["sage"]);
+                inner.configure(bg=self.colors["sage"])
+
             btn.bind("<Enter>", on_enter)
             btn.bind("<Leave>", on_leave)
             return btn
@@ -256,12 +309,14 @@ class MemoryGame:
 
         for i in range(n):
             r, c = divmod(i, cols)
+            # Default state: lime inner rim, sage outer rim, brown shadow
             card = RoundedCard(
                 self.game_frame,
                 width=160,
                 height=110,
-                bg=self.colors["lime"],
-                border_color=self.colors["brown"],
+                bg=self.colors["lime"],  # background when face down
+                inner_rim_color=self.colors["lime"],  # inner rim
+                outer_rim_color=self.colors["sage"],  # outer rim
                 radius=18,
             )
             card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
@@ -274,10 +329,16 @@ class MemoryGame:
             def mk_hover(b=btn, cnv=card):
                 def on_enter(_):
                     if not self.flip_animation_running and b.cget("text") == "":
-                        b.configure(bg=self.colors["sage"]) ; cnv.set_card_color(self.colors["sage"])
+                        # Hover state: sage inner rim, dark green outer rim
+                        b.configure(bg=self.colors["sage"])
+                        cnv.set_card_colors(self.colors["sage"], self.colors["sage"], self.colors["dark_green"])
+
                 def on_leave(_):
                     if not self.flip_animation_running and b.cget("text") == "":
-                        b.configure(bg=self.colors["lime"]) ; cnv.set_card_color(self.colors["lime"])
+                        # Normal state: lime inner rim, sage outer rim
+                        b.configure(bg=self.colors["lime"])
+                        cnv.set_card_colors(self.colors["lime"], self.colors["lime"], self.colors["sage"])
+
                 return on_enter, on_leave
 
             enter, leave = mk_hover()
@@ -329,7 +390,6 @@ class MemoryGame:
                 pass
         self._layout_job = self.root.after(120, self._layout_cards)
 
-    # ------------------------ interactions --------------------------------
     def on_card_click(self, idx):
         if self.flip_animation_running:
             return
@@ -384,13 +444,18 @@ class MemoryGame:
             if reveal:
                 text = self.cards[idx]["content"]
                 btn.configure(text=text)
+                # Flipped state: keep lime inner rim, sage outer rim
                 if self.cards[idx]["type"] == "term":
-                    btn.configure(bg=self.colors["sage"], fg=self.colors["dark_green"]) ; canvas.set_card_color(self.colors["sage"])
+                    btn.configure(bg=self.colors["sage"], fg=self.colors["dark_green"])
+                    canvas.set_card_colors(self.colors["sage"], self.colors["lime"], self.colors["sage"])
                 else:
-                    btn.configure(bg=self.colors["cream"], fg=self.colors["dark_green"]) ; canvas.set_card_color(self.colors["cream"])
+                    btn.configure(bg=self.colors["cream"], fg=self.colors["dark_green"])
+                    canvas.set_card_colors(self.colors["cream"], self.colors["lime"], self.colors["sage"])
                 cw["flipped"] = True
             else:
-                btn.configure(text="", bg=self.colors["lime"], fg=self.colors["dark_green"]) ; canvas.set_card_color(self.colors["lime"])
+                # Back to face-down state: lime inner rim, sage outer rim
+                btn.configure(text="", bg=self.colors["lime"], fg=self.colors["dark_green"])
+                canvas.set_card_colors(self.colors["lime"], self.colors["lime"], self.colors["sage"])
                 cw["flipped"] = False
 
         self._animate_flip(canvas, apply_face)
@@ -402,9 +467,11 @@ class MemoryGame:
         ca, cb = self.cards[a], self.cards[b]
         if ca["pair_id"] == cb["pair_id"] and ca["type"] != cb["type"]:
             for i in (a, b):
-                self.card_widgets[i]["matched"] = True
-                self.card_widgets[i]["button"].configure(state="disabled")
-                self.card_widgets[i]["canvas"].set_card_color(self.colors["dark_green"])
+                cw = self.card_widgets[i]
+                cw["matched"] = True
+                cw["button"].configure(state="disabled")
+                # Matched state: dark green inner rim, brown outer rim
+                cw["canvas"].set_card_colors(cw["canvas"].bg_color, self.colors["dark_green"], self.colors["brown"])
             self.matched_pairs.add(ca["pair_id"])
             if self._is_won():
                 self._after(500, self._game_over)
@@ -419,16 +486,14 @@ class MemoryGame:
     def _game_over(self):
         elapsed = int(time.time() - self.start_time)
         msg = (
-            "🎉 Congratulations! 🎉"
-            f"You completed the memory game!"
-            "📊 Your Stats: \n"
-f"• Moves: {self.moves} \n" 
-f"• Time: {elapsed}s \n"
-f"• Pairs: {len(self.matched_pairs)}"
+            "🎉 Congratulations! 🎉\n\n"
+            f"You completed the memory game!\n\n"
+            "📊 Your Stats:\n"
+            f"• Moves: {self.moves}\n"
+            f"• Time: {elapsed}s\n"
+            f"• Pairs: {len(self.matched_pairs)}"
         )
-        if messagebox.askquestion("Game Complete!", msg + " "
-
-"Play again?") == "yes":
+        if messagebox.askquestion("Game Complete!", msg + "\n\nPlay again?") == "yes":
             self.reset_game()
         else:
             self.return_to_main_menu()
@@ -470,7 +535,8 @@ f"• Pairs: {len(self.matched_pairs)}"
             # fallback view if no callback provided
             for w in self.root.winfo_children():
                 w.destroy()
-            tk.Label(self.root, text="Thanks for playing!", font=("Helvetica", 16)).pack(expand=True)
+            tk.Label(self.root, text="Thanks for playing!", font=("Helvetica", 16),
+                     bg=self.colors["cream"], fg=self.colors["dark_green"]).pack(expand=True)
 
     def reset_game(self):
         self.reset_board()
@@ -481,3 +547,5 @@ f"• Pairs: {len(self.matched_pairs)}"
             self.time_label.config(text=f"Time: {elapsed_time}s")
             if not self._is_won():
                 self._after(1000, self._update_timer)
+
+
