@@ -2,58 +2,103 @@ import tkinter as tk
 from tkinter import messagebox, font
 import random
 import time
+import math
+
 
 class RoundedCard(tk.Canvas):
-    """A Canvas widget simulating a card with rounded corners."""
+    """Canvas-based card with rounded corners that can resize smoothly."""
+
     def __init__(self, master, width, height, bg, border_color, radius=18, **kwargs):
         super().__init__(master, width=width, height=height, bd=0, highlightthickness=0, bg=master['bg'], **kwargs)
         self.radius = radius
-        self.bg = bg
+        self.bg_color = bg
         self.border_color = border_color
-        self.card_id = self.create_round_rect(2, 2, width-2, height-2, radius, fill=bg, outline=border_color, width=3)
-        # Place button on top, invisible border
-        self.button = tk.Button(self, text="", font=("Helvetica", 11, "bold"),
-                               bg=bg, fg="#677E52", activebackground=bg,
-                               activeforeground="#677E52", relief='flat', bd=0,
-                               width=8, height=3, cursor='hand2')
-        self.create_window(width//2, height//2, window=self.button, width=width-24, height=height-24)
+        self._inner_pad = 12
+        self._round_id = None
+        self._window_id = None
 
-    def create_round_rect(self, x1, y1, x2, y2, r, **kwargs):
-        points = [
-            x1+r, y1,
-            x2-r, y1,
+        self.button = tk.Button(
+            self,
+            text="",
+            font=("Helvetica", 12, "bold"),
+            bg=bg,
+            fg="#2B3A2E",
+            activebackground=bg,
+            activeforeground="#2B3A2E",
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            wraplength=1,
+            justify="center",
+        )
+        self._redraw(width, height)
+
+    def _round_points(self, x1, y1, x2, y2, r):
+        return [
+            x1 + r, y1,
+            x2 - r, y1,
             x2, y1,
-            x2, y1+r,
-            x2, y2-r,
+            x2, y1 + r,
+            x2, y2 - r,
             x2, y2,
-            x2-r, y2,
-            x1+r, y2,
+            x2 - r, y2,
+            x1 + r, y2,
             x1, y2,
-            x1, y2-r,
-            x1, y1+r,
-            x1, y1
+            x1, y2 - r,
+            x1, y1 + r,
+            x1, y1,
         ]
-        return self.create_polygon(points, smooth=True, **kwargs)
+
+    def _redraw(self, width, height):
+        self.config(width=width, height=height)
+        if self._round_id is not None:
+            self.delete(self._round_id)
+        pts = self._round_points(2, 2, width - 2, height - 2, self.radius)
+        self._round_id = self.create_polygon(
+            pts, smooth=True, fill=self.bg_color, outline=self.border_color, width=3
+        )
+        inner_w = max(1, width - self._inner_pad * 2)
+        inner_h = max(1, height - self._inner_pad * 2)
+        if self._window_id is None:
+            self._window_id = self.create_window(
+                width // 2, height // 2, window=self.button, width=inner_w, height=inner_h
+            )
+        else:
+            self.coords(self._window_id, width // 2, height // 2)
+            self.itemconfigure(self._window_id, width=inner_w, height=inner_h)
+
+    def resize(self, width, height):
+        self._redraw(width, height)
 
     def set_card_color(self, color):
-        self.itemconfig(self.card_id, fill=color)
+        self.itemconfig(self._round_id, fill=color)
+        self.bg_color = color
+
 
 class MemoryGame:
-    def __init__(self, root, flashcards):
+    def __init__(self, root, flashcards, on_exit=None):
         self.root = root
-        self.flashcards = flashcards
-        self.original_title = self.root.title()
+        self.flashcards = flashcards  # list of (id, term, translation)
+        self.on_exit = on_exit
 
-        # Color scheme
+        # remember original root state to restore after exit
+        self._original_bg = self.root.cget("bg")
+        self._original_title = self.root.title()
+
+        # Theme
         self.colors = {
-            'cream': '#F6E8B1',  # Light cream background
-            'sage': '#B0CC99',  # Sage green for cards
-            'brown': '#89725B',  # Brown for text/borders
-            'lime': '#B7CA79',  # Lime green for card backs
-            'dark_green': '#677E52'  # Dark green for all text
+            "cream": "#F6E8B1",
+            "sage": "#B0CC99",
+            "brown": "#89725B",
+            "lime": "#B7CA79",
+            "dark_green": "#2B3A2E",
         }
 
-        # Game state
+        # container: only child of root while game is active (use pack here)
+        self.container = tk.Frame(self.root, bg=self.colors["cream"])  # isolate layout
+        self.container.pack(fill="both", expand=True)
+
+        # State
         self.cards = []
         self.card_widgets = []
         self.flipped_cards = []
@@ -61,340 +106,378 @@ class MemoryGame:
         self.moves = 0
         self.start_time = time.time()
         self.game_frame = None
+        self.control_frame = None
 
-        # Card animation variables
+        # Animation / timers
         self.flip_animation_running = False
+        self._after_jobs = set()  # track after() ids for clean cancel
+        self._layout_job = None
 
-        self.setup_game()
+        # Build UI within container
+        self._build_layout()
+        self.reset_board()
 
-    def setup_game(self):
-        """Initialize the game board"""
-        for widget in self.root.winfo_children():
-            widget.destroy()
+        # Bind resize on container (not root) to avoid global churn
+        self._resize_bind_id = self.container.bind("<Configure>", self._on_resize)
+
+    # -------------------------- layout -----------------------------------
+    def _build_layout(self):
+        # clear container only (never touch other root content)
+        for w in self.container.winfo_children():
+            w.destroy()
         self.root.title("FlashPlay - Memory Game")
-        self.root.configure(bg=self.colors['cream'])
+        self.root.configure(bg=self.colors["cream"])  # theme only inside container
 
-        header_frame = tk.Frame(self.root, bg=self.colors['cream'], pady=20)
-        header_frame.pack(fill='x')
+        # grid inside container; root uses pack -> no pack/grid mixing
+        self.container.grid_rowconfigure(2, weight=1)
+        self.container.grid_columnconfigure(0, weight=1)
+
+        header = tk.Frame(self.container, bg=self.colors["cream"], pady=12)
+        header.grid(row=0, column=0, sticky="ew")
         title_font = font.Font(family="Helvetica", size=24, weight="bold")
-        tk.Label(header_frame, text="🧠 Memory Game",
-                 font=title_font, bg=self.colors['cream'],
-                 fg=self.colors['dark_green']).pack()
+        tk.Label(
+            header,
+            text="🧠 Memory Game",
+            font=title_font,
+            bg=self.colors["cream"],
+            fg=self.colors["dark_green"],
+        ).pack()
 
-        info_frame = tk.Frame(self.root, bg=self.colors['cream'], pady=10)
-        info_frame.pack()
+        info = tk.Frame(self.container, bg=self.colors["cream"])  # row 1
+        info.grid(row=1, column=0, sticky="ew", pady=(0, 6))
         info_font = font.Font(family="Helvetica", size=12)
-        self.moves_label = tk.Label(info_frame, text="Moves: 0",
-                                    font=info_font, bg=self.colors['cream'],
-                                    fg=self.colors['dark_green'])
-        self.moves_label.pack(side='left', padx=20)
-        self.time_label = tk.Label(info_frame, text="Time: 0s",
-                                   font=info_font, bg=self.colors['cream'],
-                                   fg=self.colors['dark_green'])
-        self.time_label.pack(side='right', padx=20)
+        self.moves_label = tk.Label(
+            info, text="Moves: 0", font=info_font, bg=self.colors["cream"], fg=self.colors["dark_green"]
+        )
+        self.time_label = tk.Label(
+            info, text="Time: 0s", font=info_font, bg=self.colors["cream"], fg=self.colors["dark_green"]
+        )
+        self.moves_label.pack(side="left", padx=16)
+        self.time_label.pack(side="right", padx=16)
 
-        self.prepare_cards()
-        self.create_game_board()
-        self.create_control_buttons()
-        self.update_timer()
+        self.game_frame = tk.Frame(self.container, bg=self.colors["cream"])  # row 2
+        self.game_frame.grid(row=2, column=0, sticky="nsew", padx=12, pady=12)
 
-    def prepare_cards(self):
-        max_pairs = min(8, len(self.flashcards))
-        selected_flashcards = random.sample(self.flashcards, max_pairs)
-        self.cards = []
-        for fc in selected_flashcards:
-            self.cards.append({
-                'id': len(self.cards),
-                'content': fc[1],  # term
-                'pair_id': fc[0],
-                'type': 'term'
-            })
-            self.cards.append({
-                'id': len(self.cards),
-                'content': fc[2],  # translation
-                'pair_id': fc[0],
-                'type': 'translation'
-            })
-        random.shuffle(self.cards)
+        self.control_frame = tk.Frame(self.container, bg=self.colors["cream"])  # row 3
+        self.control_frame.grid(row=3, column=0, sticky="ew", pady=(0, 12))
+        self._build_controls()
 
-    def create_game_board(self):
-        self.game_frame = tk.Frame(self.root, bg=self.colors['cream'], pady=20)
-        self.game_frame.pack(expand=True, fill='both')
+    def _build_controls(self):
+        for w in self.control_frame.winfo_children():
+            w.destroy()
+        button_font = font.Font(family="Helvetica", size=11, weight="bold")
 
-        num_cards = len(self.cards)
-        cols = 4 if num_cards <= 16 else 6
-        rows = (num_cards + cols - 1) // cols
-
-        self.card_widgets = []
-        CARD_WIDTH, CARD_HEIGHT = 160, 100
-
-
-        for i, card in enumerate(self.cards):
-            row = i // cols
-            col = i % cols
-
-            card_canvas = RoundedCard(
-                self.game_frame,
-                width=CARD_WIDTH,
-                height=CARD_HEIGHT,
-                bg=self.colors['lime'],  # Card back color
-                border_color=self.colors['brown'],
-                radius=18
+        def card_button(parent, text, command):
+            outer = tk.Frame(parent, bg=self.colors["brown"])  # border card
+            inner = tk.Frame(outer, bg=self.colors["sage"])
+            btn = tk.Button(
+                inner,
+                text=text,
+                font=button_font,
+                bg=self.colors["sage"],
+                fg=self.colors["dark_green"],
+                activebackground=self.colors["lime"],
+                activeforeground=self.colors["dark_green"],
+                relief="flat",
+                bd=0,
+                padx=18,
+                pady=10,
+                cursor="hand2",
+                command=command,
             )
-            card_canvas.grid(row=row, column=col, padx=8, pady=8, sticky='nsew')
-            self.game_frame.grid_rowconfigure(row, weight=1)
-            self.game_frame.grid_columnconfigure(col, weight=1)
+            btn.pack(expand=True, fill="both", padx=2, pady=2)
+            inner.pack(expand=True, fill="both", padx=3, pady=3)
+            outer.pack(side="left", padx=10)
 
-            card_btn = card_canvas.button
-            card_btn.config(command=lambda idx=i: self.on_card_click(idx))
+            def on_enter(_):
+                btn.configure(bg=self.colors["lime"]) ; inner.configure(bg=self.colors["lime"])
+            def on_leave(_):
+                btn.configure(bg=self.colors["sage"]) ; inner.configure(bg=self.colors["sage"])
+            btn.bind("<Enter>", on_enter)
+            btn.bind("<Leave>", on_leave)
+            return btn
 
-            def on_enter(e, btn=card_btn, canvas=card_canvas):
-                if not self.flip_animation_running and btn.cget('text') == "":
-                    btn.configure(bg=self.colors['sage'])
-                    canvas.set_card_color(self.colors['sage'])
-            def on_leave(e, btn=card_btn, canvas=card_canvas):
-                if not self.flip_animation_running and btn.cget('text') == "":
-                    btn.configure(bg=self.colors['lime'])
-                    canvas.set_card_color(self.colors['lime'])
-            card_btn.bind('<Enter>', on_enter)
-            card_btn.bind('<Leave>', on_leave)
+        card_button(self.control_frame, "🔄 New Game", self.reset_game)
+        card_button(self.control_frame, "← Back to Menu", self.return_to_main_menu)
+
+    # --------------------------- data ------------------------------------
+    def _prepare_cards(self):
+        if not self.flashcards:
+            messagebox.showinfo("No cards", "You don't have any flashcards yet.")
+            return False
+        # max 10 pairs, at least 1 (if available)
+        max_pairs = min(10, len(self.flashcards))
+        num_pairs = max_pairs  # later you can expose this as difficulty
+        selected = random.sample(self.flashcards, num_pairs)
+
+        self.cards = []
+        for pid, term, translation in selected:
+            self.cards.append({"content": term, "pair_id": pid, "type": "term"})
+            self.cards.append({"content": translation, "pair_id": pid, "type": "translation"})
+        random.shuffle(self.cards)
+        return True
+
+    # --------------------------- board -----------------------------------
+    def reset_board(self):
+        for w in self.game_frame.winfo_children():
+            w.destroy()
+        self.card_widgets.clear()
+        self.flipped_cards.clear()
+        self.matched_pairs.clear()
+        self.moves = 0
+        self.start_time = time.time()
+        if not self._prepare_cards():
+            return
+        self._create_grid()
+        self._layout_cards()
+        self._update_timer()
+        self.moves_label.config(text=f"Moves: {self.moves}")
+
+    def _best_grid(self, n):
+        # nearly square, cap columns at 6
+        best = (1, n)
+        min_diff = 999
+        for cols in range(2, min(6, n) + 1):
+            rows = math.ceil(n / cols)
+            diff = abs(rows - cols)
+            if rows * cols >= n and diff < min_diff:
+                min_diff = diff
+                best = (rows, cols)
+        return best
+
+    def _create_grid(self):
+        for r in range(12):
+            self.game_frame.grid_rowconfigure(r, weight=0)
+        for c in range(12):
+            self.game_frame.grid_columnconfigure(c, weight=0)
+
+        n = len(self.cards)
+        rows, cols = self._rows, self._cols = self._best_grid(n)
+
+        for i in range(n):
+            r, c = divmod(i, cols)
+            card = RoundedCard(
+                self.game_frame,
+                width=160,
+                height=110,
+                bg=self.colors["lime"],
+                border_color=self.colors["brown"],
+                radius=18,
+            )
+            card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
+            self.game_frame.grid_rowconfigure(r, weight=1)
+            self.game_frame.grid_columnconfigure(c, weight=1)
+
+            btn = card.button
+            btn.config(command=lambda idx=i: self.on_card_click(idx))
+
+            def mk_hover(b=btn, cnv=card):
+                def on_enter(_):
+                    if not self.flip_animation_running and b.cget("text") == "":
+                        b.configure(bg=self.colors["sage"]) ; cnv.set_card_color(self.colors["sage"])
+                def on_leave(_):
+                    if not self.flip_animation_running and b.cget("text") == "":
+                        b.configure(bg=self.colors["lime"]) ; cnv.set_card_color(self.colors["lime"])
+                return on_enter, on_leave
+
+            enter, leave = mk_hover()
+            btn.bind("<Enter>", enter)
+            btn.bind("<Leave>", leave)
 
             self.card_widgets.append({
-                'button': card_btn,
-                'canvas': card_canvas,
-                'flipped': False,
-                'matched': False
+                "button": btn,
+                "canvas": card,
+                "flipped": False,
+                "matched": False,
             })
 
-    def on_card_click(self, card_index):
-        if (self.flip_animation_running or
-                self.card_widgets[card_index]['flipped'] or
-                self.card_widgets[card_index]['matched'] or
-                len(self.flipped_cards) >= 2):
+    def _available_area(self):
+        self.root.update_idletasks()
+        w = self.game_frame.winfo_width()
+        h = self.game_frame.winfo_height()
+        if w <= 1 or h <= 1:
+            w = max(420, self.root.winfo_width() - 24)
+            h = max(320, self.root.winfo_height() - 180)
+        return w, h
+
+    def _layout_cards(self):
+        n = len(self.cards)
+        rows, cols = self._rows, self._cols
+        area_w, area_h = self._available_area()
+        gap = 16  # consistent spacing
+        card_w = max(100, (area_w - (cols + 1) * gap) // max(1, cols))
+        card_h = max(80, (area_h - (rows + 1) * gap) // max(1, rows))
+
+        # keep aspect ~ 1.45 (w/h)
+        ratio = 1.45
+        if card_w / max(1, card_h) > ratio:
+            card_w = int(card_h * ratio)
+        else:
+            card_h = int(card_w / ratio)
+
+        for wdg in self.card_widgets:
+            cur_w = wdg["canvas"].winfo_width()
+            cur_h = wdg["canvas"].winfo_height()
+            if abs(cur_w - card_w) > 2 or abs(cur_h - card_h) > 2:
+                wdg["canvas"].resize(card_w, card_h)
+
+    def _on_resize(self, _evt):
+        if self._layout_job:
+            try:
+                self.root.after_cancel(self._layout_job)
+            except Exception:
+                pass
+        self._layout_job = self.root.after(120, self._layout_cards)
+
+    # ------------------------ interactions --------------------------------
+    def on_card_click(self, idx):
+        if self.flip_animation_running:
             return
-        self.flip_card(card_index, reveal=True)
-        self.flipped_cards.append(card_index)
+        cw = self.card_widgets[idx]
+        if cw["flipped"] or cw["matched"]:
+            return
+        self._flip(idx, reveal=True)
+        self.flipped_cards.append(idx)
         if len(self.flipped_cards) == 2:
             self.moves += 1
             self.moves_label.config(text=f"Moves: {self.moves}")
-            self.root.after(1000, self.check_for_match)
+            self._after(600, self._check_match)
 
-    def flip_card(self, card_index, reveal=True):
-        card_widget = self.card_widgets[card_index]
-        card_data = self.cards[card_index]
-        if reveal:
-            self.animate_card_flip(card_index, "", card_data['content'], reveal=True)
-            card_widget['flipped'] = True
-        else:
-            self.animate_card_flip(card_index, card_data['content'], "", reveal=False)
-            card_widget['flipped'] = False
-
-    def animate_card_flip(self, card_index, old_text, new_text, reveal=True):
+    def _animate_flip(self, canvas, to_face_callback):
         self.flip_animation_running = True
-        button = self.card_widgets[card_index]['button']
-        canvas = self.card_widgets[card_index]['canvas']
-        # Disable hover during animation
-        button.unbind('<Enter>')
-        button.unbind('<Leave>')
+        total_frames = 8
+        frame_ms = 22
 
-        def shrink_phase(width=8, step=0):
-            if width > 0:
-                button.configure(width=width - 1)
-                self.root.after(40, lambda: shrink_phase(width - 1, step + 1))
-            else:
-                self.flip_card_content(card_index, new_text, reveal)
-                self.root.after(50, lambda: expand_phase(1))
+        win_id = canvas._window_id
+        start_w = canvas.itemcget(win_id, "width")
+        try:
+            start_w = int(start_w)
+        except Exception:
+            start_w = max(1, canvas.winfo_width() - 24)
 
-        def expand_phase(width=1):
-            if width <= 8:
-                button.configure(width=width)
-                self.root.after(40, lambda: expand_phase(width + 1))
+        def set_inner_width(v):
+            canvas.itemconfigure(win_id, width=max(1, int(v)))
+
+        def shrink(frame=0):
+            if frame <= total_frames:
+                set_inner_width(start_w * (1 - frame / total_frames))
+                self._after(frame_ms, lambda: shrink(frame + 1))
             else:
-                # Re-enable hover effects
-                def on_enter(e, btn=button, cnv=canvas):
-                    if not self.flip_animation_running and btn.cget('text') == "":
-                        btn.configure(bg=self.colors['sage'])
-                        cnv.set_card_color(self.colors['sage'])
-                def on_leave(e, btn=button, cnv=canvas):
-                    if not self.flip_animation_running and btn.cget('text') == "":
-                        btn.configure(bg=self.colors['lime'])
-                        cnv.set_card_color(self.colors['lime'])
-                button.bind('<Enter>', on_enter)
-                button.bind('<Leave>', on_leave)
+                to_face_callback()
+                expand()
+
+        def expand(frame=0):
+            if frame <= total_frames:
+                set_inner_width(start_w * (frame / total_frames))
+                self._after(frame_ms, lambda: expand(frame + 1))
+            else:
                 self.flip_animation_running = False
 
-        shrink_phase()
+        shrink()
 
-    def flip_card_content(self, card_index, new_text, reveal):
-        button = self.card_widgets[card_index]['button']
-        canvas = self.card_widgets[card_index]['canvas']
-        button.configure(text=new_text)
-        if reveal:
-            if self.cards[card_index]['type'] == 'term':
-                button.configure(bg=self.colors['sage'], fg=self.colors['dark_green'])
-                canvas.set_card_color(self.colors['sage'])
+    def _flip(self, idx, reveal=True):
+        cw = self.card_widgets[idx]
+        btn = cw["button"]
+        canvas = cw["canvas"]
+
+        def apply_face():
+            if reveal:
+                text = self.cards[idx]["content"]
+                btn.configure(text=text)
+                if self.cards[idx]["type"] == "term":
+                    btn.configure(bg=self.colors["sage"], fg=self.colors["dark_green"]) ; canvas.set_card_color(self.colors["sage"])
+                else:
+                    btn.configure(bg=self.colors["cream"], fg=self.colors["dark_green"]) ; canvas.set_card_color(self.colors["cream"])
+                cw["flipped"] = True
             else:
-                button.configure(bg=self.colors['cream'], fg=self.colors['dark_green'])
-                canvas.set_card_color(self.colors['cream'])
-        else:
-            button.configure(bg=self.colors['lime'], fg=self.colors['dark_green'])
-            canvas.set_card_color(self.colors['lime'])
+                btn.configure(text="", bg=self.colors["lime"], fg=self.colors["dark_green"]) ; canvas.set_card_color(self.colors["lime"])
+                cw["flipped"] = False
 
-    def check_for_match(self):
+        self._animate_flip(canvas, apply_face)
+
+    def _check_match(self):
         if len(self.flipped_cards) != 2:
             return
-        card1_idx, card2_idx = self.flipped_cards
-        card1 = self.cards[card1_idx]
-        card2 = self.cards[card2_idx]
-        if card1['pair_id'] == card2['pair_id'] and card1['type'] != card2['type']:
-            self.handle_match(card1_idx, card2_idx)
+        a, b = self.flipped_cards
+        ca, cb = self.cards[a], self.cards[b]
+        if ca["pair_id"] == cb["pair_id"] and ca["type"] != cb["type"]:
+            for i in (a, b):
+                self.card_widgets[i]["matched"] = True
+                self.card_widgets[i]["button"].configure(state="disabled")
+                self.card_widgets[i]["canvas"].set_card_color(self.colors["dark_green"])
+            self.matched_pairs.add(ca["pair_id"])
+            if self._is_won():
+                self._after(500, self._game_over)
         else:
-            self.root.after(500, lambda: self.handle_no_match(card1_idx, card2_idx))
-        self.flipped_cards = []
+            self._after(300, lambda: (self._flip(a, reveal=False), self._flip(b, reveal=False)))
+        self.flipped_cards.clear()
 
-    def handle_match(self, card1_idx, card2_idx):
-        self.card_widgets[card1_idx]['matched'] = True
-        self.card_widgets[card2_idx]['matched'] = True
-        for idx in [card1_idx, card2_idx]:
-            button = self.card_widgets[idx]['button']
-            canvas = self.card_widgets[idx]['canvas']
-            canvas.set_card_color(self.colors['dark_green'])
-            button.configure(state='disabled')
-        self.matched_pairs.add(self.cards[card1_idx]['pair_id'])
-        if self.is_game_won():
-            self.root.after(1000, self.show_game_over)
+    def _is_won(self):
+        total = len({c["pair_id"] for c in self.cards})
+        return len(self.matched_pairs) == total
 
-    def handle_no_match(self, card1_idx, card2_idx):
-        self.flip_card(card1_idx, reveal=False)
-        self.flip_card(card2_idx, reveal=False)
+    def _game_over(self):
+        elapsed = int(time.time() - self.start_time)
+        msg = (
+            "🎉 Congratulations! 🎉"
+            f"You completed the memory game!"
+            "📊 Your Stats: \n"
+f"• Moves: {self.moves} \n" 
+f"• Time: {elapsed}s \n"
+f"• Pairs: {len(self.matched_pairs)}"
+        )
+        if messagebox.askquestion("Game Complete!", msg + " "
 
-    def is_game_won(self):
-        total_pairs = len(set(card['pair_id'] for card in self.cards))
-        return len(self.matched_pairs) == total_pairs
-
-    def show_game_over(self):
-        elapsed_time = int(time.time() - self.start_time)
-        message = f"🎉 Congratulations! 🎉\n\n"
-        message += f"You completed the memory game!\n\n"
-        message += f"📊 Your Stats:\n"
-        message += f"• Moves: {self.moves}\n"
-        message += f"• Time: {elapsed_time}s\n"
-        message += f"• Pairs: {len(self.matched_pairs)}"
-        result = messagebox.askquestion("Game Complete!",
-                                        message + "\n\nWould you like to play again?")
-        if result == 'yes':
+"Play again?") == "yes":
             self.reset_game()
         else:
             self.return_to_main_menu()
 
-    def reset_game(self):
-        self.flipped_cards = []
-        self.matched_pairs = set()
-        self.moves = 0
-        self.start_time = time.time()
-        self.setup_game()
+    # ------------------------ utilities / timers --------------------------
+    def _after(self, ms, fn):
+        jid = self.root.after(ms, lambda: (self._after_jobs.discard(jid), fn()))
+        self._after_jobs.add(jid)
+        return jid
+
+    def _cleanup(self):
+        # cancel scheduled jobs
+        for jid in list(self._after_jobs):
+            try:
+                self.root.after_cancel(jid)
+            except Exception:
+                pass
+        self._after_jobs.clear()
+        # unbind resize
+        try:
+            if self._resize_bind_id:
+                self.container.unbind("<Configure>", self._resize_bind_id)
+        except Exception:
+            pass
 
     def return_to_main_menu(self):
-        self.root.title(self.original_title)
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        tk.Label(self.root, text="Thanks for playing!\n\nReturning to main menu...",
-                 font=("Helvetica", 16), bg=self.colors['cream'],
-                 fg=self.colors['dark_green']).pack(expand=True)
+        self._cleanup()
+        try:
+            self.container.destroy()
+        except Exception:
+            pass
+        # restore root state
+        self.root.configure(bg=self._original_bg)
+        self.root.title(self._original_title)
 
-    def create_control_buttons(self):
-        control_frame = tk.Frame(self.root, bg=self.colors['cream'], pady=20)
-        control_frame.pack()
-        button_font = font.Font(family="Helvetica", size=11, weight="bold")
+        if callable(self.on_exit):
+            self.on_exit()
+        else:
+            # fallback view if no callback provided
+            for w in self.root.winfo_children():
+                w.destroy()
+            tk.Label(self.root, text="Thanks for playing!", font=("Helvetica", 16)).pack(expand=True)
 
-        # Reset button with card styling
-        reset_frame = tk.Frame(control_frame,
-                               bg=self.colors['brown'],
-                               relief='flat', bd=0)
-        reset_frame.pack(side='left', padx=15)
+    def reset_game(self):
+        self.reset_board()
 
-        reset_inner = tk.Frame(reset_frame,
-                               bg=self.colors['sage'],
-                               relief='flat', bd=0)
-        reset_inner.pack(expand=True, fill='both', padx=3, pady=3)
-
-        reset_btn = tk.Button(reset_inner,
-                              text="🔄 New Game",
-                              font=button_font,
-                              bg=self.colors['sage'],
-                              fg=self.colors['dark_green'],
-                              activebackground=self.colors['lime'],
-                              activeforeground=self.colors['dark_green'],
-                              relief='flat',
-                              bd=0,
-                              padx=20,
-                              pady=8,
-                              cursor='hand2',
-                              command=self.reset_game)
-        reset_btn.pack(expand=True, fill='both', padx=2, pady=2)
-
-        # Back button with card styling
-        back_frame = tk.Frame(control_frame,
-                              bg=self.colors['brown'],
-                              relief='flat', bd=0)
-        back_frame.pack(side='right', padx=15)
-
-        back_inner = tk.Frame(back_frame,
-                              bg=self.colors['sage'],
-                              relief='flat', bd=0)
-        back_inner.pack(expand=True, fill='both', padx=3, pady=3)
-
-        back_btn = tk.Button(back_inner,
-                             text="← Back to Menu",
-                             font=button_font,
-                             bg=self.colors['sage'],
-                             fg=self.colors['dark_green'],
-                             activebackground=self.colors['lime'],
-                             activeforeground=self.colors['dark_green'],
-                             relief='flat',
-                             bd=0,
-                             padx=20,
-                             pady=8,
-                             cursor='hand2',
-                             command=self.return_to_main_menu)
-        back_btn.pack(expand=True, fill='both', padx=2, pady=2)
-
-        # Add hover effects to buttons
-        def add_button_hover(button, inner_frame, normal_bg=None):
-            if normal_bg is None:
-                normal_bg = self.colors['sage']
-            def on_enter(e):
-                button.configure(bg=self.colors['lime'])
-                inner_frame.configure(bg=self.colors['lime'])
-            def on_leave(e):
-                button.configure(bg=normal_bg)
-                inner_frame.configure(bg=normal_bg)
-            button.bind('<Enter>', on_enter)
-            button.bind('<Leave>', on_leave)
-        add_button_hover(reset_btn, reset_inner)
-        add_button_hover(back_btn, back_inner)
-
-    def update_timer(self):
-        if hasattr(self, 'time_label'):
+    def _update_timer(self):
+        if hasattr(self, "time_label"):
             elapsed_time = int(time.time() - self.start_time)
             self.time_label.config(text=f"Time: {elapsed_time}s")
-            if not self.is_game_won():
-                self.root.after(1000, self.update_timer)
-
-# Example usage for testing
-if __name__ == "__main__":
-    sample_flashcards = [
-        (1, "Hello", "Hola"),
-        (2, "Goodbye", "Adiós"),
-        (3, "Water", "Agua"),
-        (4, "Food", "Comida"),
-        (5, "House", "Casa"),
-        (6, "Cat", "Gato"),
-        (7, "Dog", "Perro"),
-        (8, "Book", "Libro")
-    ]
-    root = tk.Tk()
-    root.geometry("800x700")
-    root.resizable(True, True)
-    game = MemoryGame(root, sample_flashcards)
-    root.mainloop()
+            if not self._is_won():
+                self._after(1000, self._update_timer)
