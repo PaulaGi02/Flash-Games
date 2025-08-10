@@ -20,7 +20,7 @@ class FlashcardApp:
         tk.Label(self.root, text="Vocabulary Flashcards", font=("Helvetica", 18, "bold")).pack(pady=10)
 
         tk.Button(self.root, text="Play Memory Game", width=25, command=self.launch_memory_game).pack(pady=5)
-        # tk.Button(self.root, text="Play Race Game", width=25, command=self.launch_race_game).pack(pady=5)
+        tk.Button(self.root, text="Play Race Game", width=25, command=self.launch_race_game).pack(pady=5)
 
         tk.Button(self.root, text="Manage Flashcards", width=25, command=self.manage_flashcards).pack(pady=5)
         tk.Button(self.root, text="Exit", width=25, command=self.root.quit).pack(pady=20)
