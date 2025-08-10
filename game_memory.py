@@ -6,13 +6,13 @@ import math
 
 
 class RoundedCard(tk.Canvas):
-    def __init__(self, master, width, height, bg, inner_rim_color, outer_rim_color, radius=18, **kwargs):
-        super().__init__(master, width=width, height=height, bd=0, highlightthickness=0, bg=master['bg'], **kwargs)
+    def __init__(self, master, width, height, bg, inner_rim_color, outer_rim_color, radius=18):
+        super().__init__(master, width=width, height=height, bd=0, highlightthickness=0, bg=master['bg'])
         self.radius = radius
         self.bg_color = bg
         self.inner_rim_color = inner_rim_color
         self.outer_rim_color = outer_rim_color
-        self.shadow_color = "#89725B"  # Always brown
+        self.shadow_color = "#89725B"
         self._inner_pad = 12
         self._outer_rim_id = None
         self._inner_rim_id = None
@@ -36,7 +36,8 @@ class RoundedCard(tk.Canvas):
         )
         self._redraw(width, height)
 
-    def _round_points(self, x1, y1, x2, y2, r):
+    @staticmethod
+    def _round_points(x1, y1, x2, y2, r):
         return [
             x1 + r, y1,
             x2 - r, y1,
@@ -239,11 +240,11 @@ class MemoryGame:
             outer.pack(side="left", padx=10)
 
             def on_enter(_):
-                btn.configure(bg=self.colors["lime"]);
+                btn.configure(bg=self.colors["lime"])
                 inner.configure(bg=self.colors["lime"])
 
             def on_leave(_):
-                btn.configure(bg=self.colors["sage"]);
+                btn.configure(bg=self.colors["sage"])
                 inner.configure(bg=self.colors["sage"])
 
             btn.bind("<Enter>", on_enter)
@@ -283,10 +284,11 @@ class MemoryGame:
             return
         self._create_grid()
         self._layout_cards()
-        self._update_timer()
+        self.update_timer()
         self.moves_label.config(text=f"Moves: {self.moves}")
 
-    def _best_grid(self, n):
+    @staticmethod
+    def _best_grid(n):
         # nearly square, cap columns at 6
         best = (1, n)
         min_diff = 999
@@ -394,7 +396,7 @@ class MemoryGame:
         if self.flip_animation_running:
             return
         cw = self.card_widgets[idx]
-        if cw["flipped"] or cw["matched"]:
+        if cw['flipped'] or cw["matched"]:
             return
         self._flip(idx, reveal=True)
         self.flipped_cards.append(idx)
@@ -541,11 +543,11 @@ class MemoryGame:
     def reset_game(self):
         self.reset_board()
 
-    def _update_timer(self):
+    def update_timer(self):
         if hasattr(self, "time_label"):
             elapsed_time = int(time.time() - self.start_time)
             self.time_label.config(text=f"Time: {elapsed_time}s")
             if not self._is_won():
-                self._after(1000, self._update_timer)
+                self._after(1000, self.update_timer)
 
 
